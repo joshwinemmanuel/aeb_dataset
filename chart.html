@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Pie Charts from CSV</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 0;
+            padding: 0;
+        }
+
+        h1 {
+            margin: 20px 0;
+        }
+
+        .chart-container {
+            width: 30%;
+            display: inline-block;
+            margin: 20px;
+            vertical-align: top;
+        }
+
+        canvas {
+            width: 100%;
+            height: auto;
+        }
+
+        h2 {
+            margin: 10px 0;
+        }
+
+        .chart-legend {
+            list-style: none;
+            padding: 0;
+            text-align: left;
+            margin-top: 10px;
+        }
+
+        .chart-legend li {
+            margin-bottom: 4px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Dynamic Pie Charts</h1>
+
+    <div class="chart-container">
+        <h2>Location Distribution</h2>
+        <canvas id="locationChart"></canvas>
+        <ul id="locationLegend" class="chart-legend"></ul>
+    </div>
+
+    <div class="chart-container">
+        <h2>Time of Day Distribution</h2>
+        <canvas id="timeOfDayChart"></canvas>
+        <ul id="timeOfDayLegend" class="chart-legend"></ul>
+    </div>
+
+    <div class="chart-container">
+        <h2>Weather Distribution</h2>
+        <canvas id="weatherChart"></canvas>
+        <ul id="weatherLegend" class="chart-legend"></ul>
+    </div>
+
+    <script>
+        // Function to load and parse the CSV file
+        function loadCSVData() {
+            Papa.parse('valid_coordinates_log.csv', {
+                download: true,
+                header: true,
+                complete: function(results) {
+                    const data = results.data;
+                    createCharts(data);
+                }
+            });
+        }
+
+        function createCharts(data) {
+            // Initialize empty data structures
+            const locationCounts = {};
+            const timeOfDayCounts = {};
+            const weatherCounts = {};
+
+            // Process the CSV data
+            data.forEach(row => {
+                // Location data
+                const location = row['Location'];
+                if (location) {
+                    locationCounts[location] = (locationCounts[location] || 0) + 1;
+                }
+
+                // Time of Day data
+                const timeOfDay = row['Times of Day'];
+                if (timeOfDay) {
+                    timeOfDayCounts[timeOfDay] = (timeOfDayCounts[timeOfDay] || 0) + 1;
+                }
+
+                // Weather data
+                const weather = row['Weather'];
+                if (weather) {
+                    weatherCounts[weather] = (weatherCounts[weather] || 0) + 1;
+                }
+            });
+
+            // Create the pie charts
+            createPieChart('locationChart', 'Location Distribution', locationCounts, 'locationLegend');
+            createPieChart('timeOfDayChart', 'Time of Day Distribution', timeOfDayCounts, 'timeOfDayLegend');
+            createPieChart('weatherChart', 'Weather Distribution', weatherCounts, 'weatherLegend');
+        }
+
+        function createPieChart(chartId, chartLabel, dataCounts, legendId) {
+            const labels = Object.keys(dataCounts);
+            const data = Object.values(dataCounts);
+
+            const ctx = document.getElementById(chartId).getContext('2d');
+            const chart = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'],
+                        hoverOffset: 10
+                    }]
+                },
+                options: {
+                    plugins: {
+                        datalabels: {
+                            formatter: (value, context) => {
+                                const percentage = (value * 100 / data.reduce((a, b) => a + b, 0)).toFixed(2) + "%";
+                                return context.chart.data.labels[context.dataIndex] + ": " + percentage;
+                            },
+                            color: '#fff',
+                            font: {
+                                size: 14,
+                            }
+                        }
+                    },
+                    layout: {
+                        padding: 15
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const percentage = (context.raw * 100 / data.reduce((a, b) => a + b, 0)).toFixed(2);
+                                    return label + ": " + percentage + "%";
+                                }
+                            }
+                        },
+                        legend: {
+                            display: false // Disable the default legend
+                        }
+                    }
+                }
+            });
+
+            // Generate the custom legend
+            const legend = document.getElementById(legendId);
+            legend.innerHTML = chart.data.labels.map((label, i) => {
+                return `<li>${label}: ${chart.data.datasets[0].data[i]} (${((chart.data.datasets[0].data[i] * 100) / data.reduce((a, b) => a + b, 0)).toFixed(2)}%)</li>`;
+            }).join('');
+        }
+
+        // Auto-refresh the page every 60 seconds
+        setInterval(loadCSVData, 60000); // 60000 milliseconds = 60 seconds
+
+        // Load the CSV data when the page loads
+        document.addEventListener('DOMContentLoaded', loadCSVData);
+    </script>
+
+</body>
+</html>

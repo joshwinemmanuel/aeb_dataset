@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 0;
+            padding: 0;
+        }
+        h1 {
+            margin: 20px 0;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        .pie-charts {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            width: 50%;
+        }
+        .chart-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .chart-container canvas {
+            width: 100%;
+            height: 400px;
+        }
+        .legend-container {
+            margin-top: 10px;
+            text-align: center;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 5px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            white-space: nowrap;
+        }
+        .legend-item span {
+            margin-left: 4px;
+            font-size: 12px; /* Adjust the font size here */
+        }
+        .legend-color {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+        }
+        .bar-chart-container {
+            width: 45%;
+            margin-top: 20px;
+        }
+        .chart-heading {
+            font-size: 18px;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>AEB_MetaData Dashboard</h1>
+
+    <div class="container">
+        <!-- Pie Charts -->
+        <div class="pie-charts">
+            <div class="chart-container">
+                <div class="chart-heading">Location Distribution</div>
+                <canvas id="locationChart"></canvas>
+                <div id="locationLegend" class="legend-container"></div>
+            </div>
+            <div class="chart-container">
+                <div class="chart-heading">Time of Day Distribution</div>
+                <canvas id="timeOfDayChart"></canvas>
+                <div id="timeOfDayLegend" class="legend-container"></div>
+            </div>
+            <div class="chart-container">
+                <div class="chart-heading">Weather Distribution</div>
+                <canvas id="weatherChart"></canvas>
+                <div id="weatherLegend" class="legend-container"></div>
+            </div>
+        </div>
+
+        <!-- Bar Chart -->
+        <div class="bar-chart-container">
+            <div class="chart-heading">Country Distribution</div>
+            <canvas id="countryChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        const charts = {
+            locationChart: null,
+            timeOfDayChart: null,
+            weatherChart: null,
+            countryChart: null
+        };
+
+        function loadCSVData() {
+            Papa.parse('valid_coordinates_log.csv', {
+                download: true,
+                header: true,
+                complete: function(results) {
+                    const data = results.data;
+                    createCharts(data);
+                    createBarChart(data);
+                }
+            });
+        }
+
+        function createCharts(data) {
+            const locationCounts = {};
+            const timeOfDayCounts = {};
+            const weatherCounts = {};
+
+            data.forEach(row => {
+                const location = row['Location'];
+                if (location) {
+                    locationCounts[location] = (locationCounts[location] || 0) + 1;
+                }
+                const timeOfDay = row['Times of Day'];
+                if (timeOfDay) {
+                    timeOfDayCounts[timeOfDay] = (timeOfDayCounts[timeOfDay] || 0) + 1;
+                }
+                const weather = row['Weather'];
+                if (weather) {
+                    weatherCounts[weather] = (weatherCounts[weather] || 0) + 1;
+                }
+            });
+
+            updatePieChart('locationChart', 'Location Distribution', locationCounts, 'locationLegend', getDynamicColors(Object.keys(locationCounts).length, 'scheme1'));
+            updatePieChart('timeOfDayChart', 'Time of Day Distribution', timeOfDayCounts, 'timeOfDayLegend', getDynamicColors(Object.keys(timeOfDayCounts).length, 'scheme2'));
+            updatePieChart('weatherChart', 'Weather Distribution', weatherCounts, 'weatherLegend', getDynamicColors(Object.keys(weatherCounts).length, 'scheme3'));
+        }
+
+        function updatePieChart(chartId, chartLabel, dataCounts, legendId, colors) {
+            const labels = Object.keys(dataCounts);
+            const data = Object.values(dataCounts);
+
+            if (charts[chartId]) {
+                charts[chartId].data.labels = labels;
+                charts[chartId].data.datasets[0].data = data;
+                charts[chartId].data.datasets[0].backgroundColor = colors;
+                charts[chartId].update();
+            } else {
+                const ctx = document.getElementById(chartId).getContext('2d');
+                charts[chartId] = new Chart(ctx, {
+                    type: 'pie',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            data: data,
+                            backgroundColor: colors,
+                            hoverOffset: 4
+                        }]
+                    },
+                    options: {
+                        plugins: {
+                            datalabels: {
+                                formatter: (value, context) => {
+                                    const percentage = (value * 100 / data.reduce((a, b) => a + b, 0)).toFixed(2) + "%";
+                                    return context.chart.data.labels[context.dataIndex] + ": " + percentage;
+                                },
+                                color: '#fff',
+                                font: {
+                                    size: 14,
+                                }
+                            }
+                        },
+                        layout: {
+                            padding: 15
+                        },
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const label = context.label || '';
+                                        const percentage = (context.raw * 100 / data.reduce((a, b) => a + b, 0)).toFixed(2);
+                                        return percentage + "%";
+                                    }
+                                }
+                            },
+                            legend: {
+                                display: false // Disable the default legend
+                            }
+                        }
+                    }
+                });
+            }
+
+            const legendContainer = document.getElementById(legendId);
+            legendContainer.innerHTML = '';
+
+            labels.forEach((label, index) => {
+                const legendItem = document.createElement('div');
+                legendItem.className = 'legend-item';
+                legendItem.innerHTML = 
+                    `<div class="legend-color" style="background-color: ${colors[index]}"></div>
+                    <span>${label}: ${dataCounts[label]}</span>`;
+                legendContainer.appendChild(legendItem);
+            });
+        }
+
+        function createBarChart(data) {
+            const countryCounts = {};
+
+            data.forEach(row => {
+                const country = row['Country'];
+                if (country) {
+                    countryCounts[country] = (countryCounts[country] || 0) + 1;
+                }
+            });
+
+            const labels = Object.keys(countryCounts);
+            const counts = Object.values(countryCounts);
+
+            const ctx = document.getElementById('countryChart').getContext('2d');
+            if (charts.countryChart) {
+                charts.countryChart.data.labels = labels;
+                charts.countryChart.data.datasets[0].data = counts;
+                charts.countryChart.data.datasets[0].backgroundColor = getDynamicColors(labels.length, 'scheme4');
+                charts.countryChart.update();
+            } else {
+                charts.countryChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Number of Records',
+                            data: counts,
+                            backgroundColor: getDynamicColors(labels.length, 'scheme4'),
+                            borderColor: 'rgba(0, 0, 0, 0.1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: {
+                                display: false
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const label = context.label || '';
+                                        const value = context.raw || 0;
+                                        return `${value}`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                ticks: {
+                                    autoSkip: false
+                                }
+                            },
+                            y: {
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        function getDynamicColors(count, scheme) {
+            const colorSchemes = {
+                scheme1: ['#5752d1', '#a086e4', '#c6adf1', '#d9c3f9', '#e8d5ff'],
+                scheme2: ['#C9190B', '#d84b27', '#e66e43', '#f38e62', '#ffac83'],
+                scheme3: ['#3c7685', '#3b8696', '#3996a7', '#35a7b7', '#2fb8c7', '#27c9d6', '#1ddbe4', '#10edf2', '#00ffff'],
+                scheme4: ['#ff0052', '#ff1f82', '#f243ae', '#d962d3', '#b77cee', '#8c92fe', '#5da3ff', '#26b0ff', '#00ebde']
+            };
+
+            const colors = colorSchemes[scheme] || [];
+            if (colors.length >= count) {
+                return colors.slice(0, count);
+            } else {
+                return generateColors(count - colors.length, colors);
+            }
+        }
+
+        function generateColors(count, baseColors) {
+            const colors = [...baseColors];
+            const hueStep = 360 / count;
+            for (let i = 0; i < count; i++) {
+                const hue = Math.floor(i * hueStep);
+                colors.push(`hsl(${hue}, 70%, 80%)`);
+            }
+            return colors;
+        }
+
+        function startRealTimeUpdates() {
+            loadCSVData(); // Initial load
+            setInterval(loadCSVData, 600); // Update every 60 seconds
+        }
+
+        document.addEventListener('DOMContentLoaded', startRealTimeUpdates);
+    </script>
+
+</body>
+</html>
